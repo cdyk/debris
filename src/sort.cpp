@@ -4,61 +4,139 @@
 #include <cassert>
 #include <algorithm>
 
-template<typename T>
-__declspec(noinline) void insertionSort(T* data, size_t N, bool(*lessThan)(const T&, const T&))
-{
-  for (size_t j = 1; j < N; j++) {
-    auto t(std::move(data[j]));
-    size_t i = j;
-    for (; 0 < i && !lessThan(data[i - 1], t); i--) {
-      data[i] = std::move(data[i - 1]);
+namespace {
+  
+  const size_t quickSortInsertionSortThreshold = 32;
+
+  template<typename T>
+  void insertionSort(T* data, size_t N, bool(*lessThan)(const T&, const T&))
+  {
+    for (size_t j = 1; j < N; j++) {
+      auto t(std::move(data[j]));
+      size_t i = j;
+      for (; 0 < i && !lessThan(data[i - 1], t); i--) {
+        data[i] = std::move(data[i - 1]);
+      }
+      data[i] = std::move(t);
     }
-    data[i] = std::move(t);
   }
+
+  template<typename T>
+  T& medianOfThree(T& a, T& b, T& c, bool(*lessThan)(const T&, const T&))
+  {
+    auto & min_ab = lessThan(a, b) ? a : b;
+    auto & max_ab = lessThan(a, b) ? b : a;
+    auto & min_max_ab_c = lessThan(max_ab, c) ? max_ab : c;
+    auto & pivot = lessThan(min_ab, min_max_ab_c) ? min_max_ab_c : min_ab;
+
+    if (a != b && b != c && a != c) {
+      //assert(a < pivot || b < pivot || c < pivot);
+      //assert(pivot < a || pivot < b || pivot < c);
+    }
+    else {
+      //assert(a <= pivot || b <= pivot || c <= pivot);
+      //assert(pivot <= a || pivot <= b || pivot <= c);
+    }
+
+    return pivot;
+  }
+
+  template<typename T>
+  size_t partition(T* data, size_t N, bool(*lessThan)(const T&, const T&))
+  {
+    auto & pivot = data[N - 1];
+    size_t i0 = 0;
+    size_t i1 = N - 1;
+    while (true) {
+
+      // invariant: data[i<i0] < pivot
+      // i0 < N should be unnecessary since pivot is at end and will terminate
+      for (; lessThan(data[i0], pivot); i0++) {
+        //assert(i0 < N && "Pivot is last element and can't be less than itself");
+      }
+
+      // invariant: data[i1 <= i] >= pivot
+      for (; 0 < i1 && !lessThan(data[i1 - 1], pivot); i1--);
+
+      //assert(i0 <= i1 && "i0 and i1 should not pass due to predicate");
+      if (i0 == i1) break;
+      else {
+        std::swap(data[i0], data[i1 - 1]);
+      }
+    }
+    return i0;
+  }
+
+
+  template<typename T>
+  __declspec(noinline) void quickSort(T* data, size_t N, bool(*lessThan)(const T&, const T&))
+  {
+    auto & pivot = medianOfThree(data[0], data[N / 2], data[N - 1], lessThan);
+    std::swap(pivot, data[N - 1]);
+
+    auto m = partition(data, N, lessThan);
+    std::swap(data[m], data[N - 1]);
+
+    if (m) quickSort(data, m, lessThan);
+    if (2 < N - m) quickSort(data + m + 1, N - m - 1, lessThan);
+  }
+
+
+  template<typename T>
+  void quickSortInsertion(T* data, size_t N, bool(*lessThan)(const T&, const T&))
+  {
+    if (N < quickSortInsertionSortThreshold) {
+      for (size_t j = 1; j < N; j++) {
+        auto t(std::move(data[j]));
+        size_t i = j;
+        for (; 0 < i && !lessThan(data[i - 1], t); i--) {
+          data[i] = std::move(data[i - 1]);
+        }
+        data[i] = std::move(t);
+      }
+    }
+    else {
+      auto & pivot = medianOfThree(data[0], data[N / 2], data[N - 1], lessThan);
+      std::swap(pivot, data[N - 1]);
+
+      auto m = partition(data, N, lessThan);
+      std::swap(data[m], data[N - 1]);
+
+      if (m) quickSortInsertion(data, m, lessThan);
+      if (2 < N - m) quickSortInsertion(data + m + 1, N - m - 1, lessThan);
+    }
+  }
+
+
+}
+
+
+template<typename T>
+void insertionSortRunner(T* data, size_t N, bool(*lessThan)(const T&, const T&))
+{
+  insertionSort(data, N, lessThan);
 }
 
 template<typename T>
-__declspec(noinline) void recursiveQuickSort(T* data, size_t N, bool(*lessThan)(const T&, const T&))
+__declspec(noinline) void quickSortRunner(T* data, size_t N, bool(*lessThan)(const T&, const T&))
 {
-  if (N < 3) return;
-  auto& a = data[0];
-  auto& b = data[N / 2];
-  auto& c = data[N - 1];
-
-
-
-  auto & min_ab = lessThan(a, b) ? a : b;
-  auto & max_ab = lessThan(a, b) ? b : a;
-  auto & min_max_ab_c = lessThan(max_ab, c) ? max_ab : c;
-  auto & pivot = lessThan(min_ab, min_max_ab_c) ? min_max_ab_c : min_ab;
-
-  if (a != b && b != c && a != c) {
-    assert(a < pivot || b < pivot || c < pivot);
-    assert(pivot < a || pivot < b || pivot < c);
-  }
-  else {
-    assert(a <= pivot || b <= pivot || c <= pivot);
-    assert(pivot <= a || pivot <= b || pivot <= c);
-  }
-  std::swap(pivot, data[N - 1]);
-  pivot = data[N - 1];
-
-  size_t i0 = 0;
-  size_t i1 = N - 1;
-  while (i0 + 1 < i1) {
-    for (; i0 < N && lessThan(data[i0], pivot); i0++);
-    for (; i0 < i1 && lessThan(pivot, data[i1 - 1]); i1--);
-
-    std::swap(data[i0], data[i1]);
-    auto t(std::move(data[i0]));
-    data[i0] = std::move(data[i1]);
-    data[i1] = std::move(t);
-  }
-  recursiveQuickSort(data, i0, lessThan);
-  recursiveQuickSort(data + i0, N - i0, lessThan);
-
-  int g = 2;
+  if (N <= 1) return;
+  quickSort(data, N, lessThan);
 }
+
+template<typename T>
+__declspec(noinline) void quickSortFatRunner(T* data, size_t N, bool(*lessThan)(const T&, const T&))
+{
+  if (N <= 1) return;
+  quickSortFat(data, N, lessThan);
+}
+
+template<typename T>
+__declspec(noinline) void quickSortInsertionRunner(T* data, size_t N, bool(*lessThan)(const T&, const T&))
+{
+  quickSortInsertion(data, N, lessThan);
+}
+
 
 template<typename T>
 __declspec(noinline) void stlSort(T* data, size_t N, bool (*lessThan)(const T&, const T&))
@@ -108,22 +186,29 @@ int main(int argc, char** argv)
   size_t N = 1;
   for (unsigned i = 0; i < 9; i++) {
 
-    auto a = values.size();
     values.resize(N);
-    for (auto k = a; k < N; k++) {
-      values[k] = std::rand();
-    }
-
     gold.resize(N);
-    std::memcpy(gold.data(), values.data(), sizeof(unsigned)*N);
-    std::sort(gold.begin(), gold.end());
+    for (unsigned l = 0; l < 2; l++) {
+      if (l == 0) {
+        for (auto k = 0; k < N; k++) {
+          values[k] = std::rand();
+        }
+      }
+      else if (l == 1) {
+        for (auto k = 0; k < N; k++) {
+          values[k] = values[k] & 1;
+        }
+      }
 
-    if (i != 0) {
-      fprintf(stderr, "------------------------------------------------------------\n");
+      std::memcpy(gold.data(), values.data(), sizeof(unsigned)*N);
+      std::sort(gold.begin(), gold.end());
+
+      fprintf(stderr, "l=%d ------------------------------------------------------------\n", l);
+      runner(N, "std::sort         ", stlSort<unsigned>);
+      if (i < 5)runner(N, "insertionSort     ", insertionSortRunner<unsigned>);
+      runner(N, "quickSort         ", quickSortRunner<unsigned>);
+      runner(N, "quickSortInsertion", quickSortInsertionRunner<unsigned>);
     }
-    runner(N, "std::sort         ", stlSort<unsigned>);
-    if (N < 5)runner(N, "insertionSort     ", insertionSort<unsigned>);
-    runner(N, "recursiveQuickSort", recursiveQuickSort<unsigned>);
 
     N = 7 * N + N / 3;
   }
