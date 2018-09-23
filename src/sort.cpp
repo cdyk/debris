@@ -22,7 +22,7 @@ namespace {
   }
 
   template<typename T>
-  T& medianOfThree(T& a, T& b, T& c, bool(*lessThan)(const T&, const T&))
+  __forceinline T& medianOfThree(T& a, T& b, T& c, bool(*lessThan)(const T&, const T&))
   {
     auto & min_ab = lessThan(a, b) ? a : b;
     auto & max_ab = lessThan(a, b) ? b : a;
@@ -42,7 +42,7 @@ namespace {
   }
 
   template<typename T>
-  size_t partition(T* data, size_t N, bool(*lessThan)(const T&, const T&))
+  __forceinline size_t partition(T* data, size_t N, bool(*lessThan)(const T&, const T&))
   {
     auto & pivot = data[N - 1];
     size_t i0 = 0;
@@ -67,9 +67,60 @@ namespace {
     return i0;
   }
 
-
   template<typename T>
-  __declspec(noinline) void quickSort(T* data, size_t N, bool(*lessThan)(const T&, const T&))
+  __forceinline void fatPartition(size_t& A, size_t& B, T* data, size_t N, bool(*lessThan)(const T&, const T&))
+  {
+    auto & pivot = data[N - 1];
+    size_t i0 = 0;
+    size_t i1 = N - 1;
+    size_t k0 = i0;
+    size_t k1 = i1;
+
+    while (true) {
+
+      while (!lessThan(pivot, data[i0])) {
+        if (!lessThan(data[i0], pivot)) std::swap(data[i0], data[k0++]);
+        i0++;
+      }
+
+      while (0 < i1 && !lessThan(data[i1 - 1], pivot)) {
+        if (!lessThan(pivot, data[i1 - 1])) std::swap(data[i1], data[k1--]);
+        i1--;
+      }
+
+      if (i1 <= i0) break;
+      std::swap(data[i0], data[i1 - 1]);
+    }
+
+    // From:
+    // |  =  |  <    |  >     |  =  |
+    // 0      k0     i0        k1    n
+    //   n0     m0      m1      n1
+
+    // To:
+    // |  <    |  =  |  =  |  >     |
+    // 0     i0-n0   i0  i0+n1      n
+
+
+    auto n0 = std::min(k0, i0 - k0);
+
+    auto s0 = 0;
+    auto d0 = i0 - n0;
+    A = d0;
+    for (; n0; n0--) std::swap(data[s0++], data[d0++]);
+
+
+    auto n1 = std::min(k1 - i0, N - k1);
+    auto s1 = k1;
+    auto d1 = N - n1;
+    for (; n1; n1--) std::swap(data[s1++], data[d1++]);
+    B = i0 + n1;
+  }
+
+
+/*
+  template<typename T>
+  void quickSort(T* data, size_t N, bool(*lessThan)(const T&, const T&))
   {
     auto & pivot = medianOfThree(data[0], data[N / 2], data[N - 1], lessThan);
     std::swap(pivot, data[N - 1]);
@@ -79,6 +130,34 @@ namespace {
 
     if (m) quickSort(data, m, lessThan);
     if (2 < N - m) quickSort(data + m + 1, N - m - 1, lessThan);
+  }
+*/
+
+  template<typename T>
+  void quickSort(T* data, size_t N, bool(*lessThan)(const T&, const T&))
+  {
+    if (N < 4) {
+      for (size_t j = 1; j < N; j++) {
+        auto t(std::move(data[j]));
+        size_t i = j;
+        for (; 0 < i && !lessThan(data[i - 1], t); i--) {
+          data[i] = std::move(data[i - 1]);
+        }
+        data[i] = std::move(t);
+      }
+      return;
+    }
+
+
+    auto & pivot = medianOfThree(data[0], data[N / 2], data[N - 1], lessThan);
+    std::swap(pivot, data[N - 1]);
+
+    size_t m0, m1;
+    fatPartition(m0, m1, data, N, lessThan);
+    //std::swap(data[m], data[N - 1]);
+
+    if (1 < m0) quickSort(data, m0, lessThan);
+    if (1 < N - m1) quickSort(data + m1, N - m1, lessThan);
   }
 
 
@@ -182,6 +261,17 @@ namespace {
 int main(int argc, char** argv)
 {
   std::srand(42);
+
+  values.resize(10);
+  for (unsigned i = 0; i < 3; i++) {
+    values[3 * i + 0] = 0;
+    values[3 * i + 1] = 1;
+    values[3 * i + 2] = 2;
+  }
+  values[9] = 1;
+
+  size_t A, B;
+  fatPartition(A, B, values.data(), values.size(), lessThan);
 
   size_t N = 1;
   for (unsigned i = 0; i < 9; i++) {
